@@ -25,24 +25,42 @@ public class Bola : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         udpClient = FindObjectOfType<Client>();
 
-        // Desabilita física nos clientes não-host para evitar conflitos
-        if (udpClient != null && udpClient.myId != 4)
+        // Começa coroutine que espera o ID ser atribuído
+        StartCoroutine(EsperarHostDaBola());
+
+        System.Collections.IEnumerator EsperarHostDaBola()
         {
-            rb.isKinematic = true;  // Bola segue apenas posições recebidas via rede
-            rb.simulated = false;   // Desabilita simulação física
+            // Espera o Client existir e ter um ID válido
+            while (udpClient == null || udpClient.myId == -1)
+            {
+                udpClient = FindObjectOfType<Client>();
+                yield return null;
+            }
+
+            // Se este cliente NÃO for o host da bola (ID 4)
+            if (udpClient.myId != 4)
+            {
+                rb.isKinematic = true;
+                rb.simulated = false;
+                Debug.Log($"[Cliente {udpClient.myId}] Física da bola desativada — aguardando sincronização via rede");
+                yield break;
+            }
+
+            // Se for o host, ativa física e lança a bola
+            rb.isKinematic = false;
+            rb.simulated = true;
+            Debug.Log("[Host] Sou o host da bola — lançando em 1 segundo...");
+            yield return new WaitForSeconds(1f);
+            LancarBola();
         }
 
-        // O jogador com ID 4 será o "host da bola" (responsável por lançá-la e sincronizar)
-        if (udpClient != null && udpClient.myId == 4 && !jogoTerminado)
-        {
-            Debug.Log("[Host] Tentando lançar bola em 1 segundo...");
-            Invoke("LancarBola", 1f);
-        }
-        else
-        {
-            Debug.Log($"[Cliente {udpClient?.myId}] Não sou o host ou jogo terminou, não lanço bola.");
-        }
     }
+
+    private void LancarBola()
+    {
+        throw new System.NotImplementedException();
+    }
+
 
     void Update()
     {
@@ -60,7 +78,7 @@ public class Bola : MonoBehaviour
         }
     }
 
-    void LancarBola()
+    public Bola()
     {
         if (jogoTerminado || bolaLancada) return; // Não lança se o jogo acabou ou já lançou
         bolaLancada = true;
