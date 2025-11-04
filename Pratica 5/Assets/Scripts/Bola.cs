@@ -25,10 +25,22 @@ public class Bola : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         udpClient = FindObjectOfType<Client>();
 
+        // Desabilita física nos clientes não-host para evitar conflitos
+        if (udpClient != null && udpClient.myId != 4)
+        {
+            rb.isKinematic = true;  // Bola segue apenas posições recebidas via rede
+            rb.simulated = false;   // Desabilita simulação física
+        }
+
         // O jogador com ID 4 será o "host da bola" (responsável por lançá-la e sincronizar)
         if (udpClient != null && udpClient.myId == 4 && !jogoTerminado)
         {
+            Debug.Log("[Host] Tentando lançar bola em 1 segundo...");
             Invoke("LancarBola", 1f);
+        }
+        else
+        {
+            Debug.Log($"[Cliente {udpClient?.myId}] Não sou o host ou jogo terminou, não lanço bola.");
         }
     }
 
@@ -36,13 +48,7 @@ public class Bola : MonoBehaviour
     {
         if (udpClient == null || jogoTerminado) return;
 
-        // Host (ID 4) controla e envia posição da bola
-        if (!bolaLancada && udpClient.myId == 4)
-        {
-            bolaLancada = true;
-            Invoke("LancarBola", 1f);
-        }
-
+        // Host (ID 4) controla e envia posição da bola (mesmo parada, para sincronização inicial)
         if (udpClient.myId == 4)
         {
             string msg = "BALL:" +
@@ -50,20 +56,23 @@ public class Bola : MonoBehaviour
                          transform.position.y.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             udpClient.SendUdpMessage(msg);
+            // Debug.Log($"[Host] Enviando BALL: {transform.position}"); // Descomente se quiser logs constantes
         }
     }
 
     void LancarBola()
     {
-        if (jogoTerminado) return; // Não lança se o jogo acabou
+        if (jogoTerminado || bolaLancada) return; // Não lança se o jogo acabou ou já lançou
+        bolaLancada = true;
         float dirX = Random.Range(0, 2) == 0 ? -1 : 1;
         float dirY = Random.Range(-0.5f, 0.5f);
         rb.linearVelocity = new Vector2(dirX, dirY).normalized * velocidade;
+        Debug.Log($"[Host] Bola lançada com velocidade: {rb.linearVelocity}");
     }
 
     void OnCollisionEnter2D(Collision2D col)
     {
-        if (udpClient == null || jogoTerminado) return;
+        if (udpClient == null || jogoTerminado) return; // Todos processam colisões para consistência
 
         // Rebote nas raquetes (cada jogador controla sua própria raquete em duplas)
         if (col.gameObject.CompareTag("Raquete"))
@@ -97,6 +106,7 @@ public class Bola : MonoBehaviour
     {
         transform.position = Vector3.zero;
         rb.linearVelocity = Vector2.zero;
+        bolaLancada = false; // Permite relançar
 
         if (PontoTimeA >= 5 || PontoTimeB >= 5) // Limite ajustado para 5 pontos em duplas
         {

@@ -20,6 +20,9 @@ public class Client : MonoBehaviour
     public int Velocidade = 20;
     private bool jogoTerminado = false; // Flag para impedir movimento após vitória
 
+    // Nova variável para interpolação da bola (como os jogadores)
+    private Vector3 remoteBallPosition = Vector3.zero;
+
     private ConcurrentQueue<string> messageQueue = new ConcurrentQueue<string>();
 
     void Start()
@@ -34,13 +37,30 @@ public class Client : MonoBehaviour
         // Solicita conexão
         client.Send(Encoding.UTF8.GetBytes("HELLO"), 5);
 
-        // Bola inicial
+        // Bola inicial - garante visibilidade
         if (bola != null)
         {
             bola.transform.position = Vector3.zero;
             var rb = bola.GetComponent<Rigidbody2D>();
             if (rb != null)
                 rb.linearVelocity = Vector2.zero;
+            remoteBallPosition = Vector3.zero;
+
+            // Garante que a bola seja visível (ativa SpriteRenderer se existir)
+            var renderer = bola.GetComponent<SpriteRenderer>();
+            if (renderer != null)
+            {
+                renderer.enabled = true;
+                Debug.Log($"[Cliente] Bola visível ativada para ID {myId}");
+            }
+            else
+            {
+                Debug.LogWarning("[Cliente] SpriteRenderer não encontrado na bola!");
+            }
+        }
+        else
+        {
+            Debug.LogError("[Cliente] GameObject 'bola' não atribuído no Inspector!");
         }
     }
 
@@ -66,7 +86,8 @@ public class Client : MonoBehaviour
             players[myId - 1].transform.position = pos;
 
             // Envia posição
-            string msgPos = $"POS:{myId};{pos.x.ToString("F2", CultureInfo.InvariantCulture)};{pos.y.ToString("F2", CultureInfo.InvariantCulture)}";
+            string msgPos =
+                $"POS:{myId};{pos.x.ToString("F2", CultureInfo.InvariantCulture)};{pos.y.ToString("F2", CultureInfo.InvariantCulture)}";
             SendUdpMessage(msgPos);
         }
 
@@ -81,6 +102,16 @@ public class Client : MonoBehaviour
                     Time.deltaTime * 10f
                 );
             }
+        }
+
+        // Interpola a posição da bola para suavidade (como os jogadores)
+        if (bola != null)
+        {
+            bola.transform.position = Vector3.Lerp(
+                bola.transform.position,
+                remoteBallPosition,
+                Time.deltaTime * 10f // Mesmo fator de interpolação
+            );
         }
     }
 
@@ -100,15 +131,15 @@ public class Client : MonoBehaviour
         if (msg.StartsWith("ASSIGN:"))
         {
             myId = int.Parse(msg.Substring(7));
-            Debug.Log($"[Cliente] Meu ID = {myId} (duplas: Time A=1-2, Time B=3-4)");
+            Debug.Log($"[Cliente] ID atribuído: {myId} (duplas: Time A=1-2, Time B=3-4)");
 
             // Define posições iniciais para duplas (duas raquetes por lado)
             Vector3[] startPositions = new Vector3[]
             {
-                new Vector3(-8f,  2f, 0f),  // Player 1 - Time A, cima
-                new Vector3(-8f, -2f, 0f),  // Player 2 - Time A, baixo
-                new Vector3( 8f,  2f, 0f),  // Player 3 - Time B, cima
-                new Vector3( 8f, -2f, 0f)   // Player 4 - Time B, baixo
+                new Vector3(-8f, 2f, 0f), // Player 1 - Time A, cima
+                new Vector3(-8f, -2f, 0f), // Player 2 - Time A, baixo
+                new Vector3(8f, 2f, 0f), // Player 3 - Time B, cima
+                new Vector3(8f, -2f, 0f) // Player 4 - Time B, baixo
             };
 
             for (int i = 0; i < 4; i++)
@@ -128,6 +159,7 @@ public class Client : MonoBehaviour
                 var rb = bola.GetComponent<Rigidbody2D>();
                 if (rb != null)
                     rb.linearVelocity = Vector2.zero;
+                remoteBallPosition = Vector3.zero;
             }
         }
         else if (msg.StartsWith("POS:"))
@@ -146,15 +178,14 @@ public class Client : MonoBehaviour
         }
         else if (msg.StartsWith("BALL:"))
         {
-            // Bola sincronizada entre duplas
+            // Bola sincronizada entre duplas com interpolação
             string[] parts = msg.Substring(5).Split(';');
             if (parts.Length == 2)
             {
                 float x = float.Parse(parts[0], CultureInfo.InvariantCulture);
                 float y = float.Parse(parts[1], CultureInfo.InvariantCulture);
-
-                if (bola != null)
-                    bola.transform.position = new Vector3(x, y, 0);
+                remoteBallPosition = new Vector3(x, y, 0);
+                // Debug.Log($"[Cliente {myId}] Recebeu BALL: {remoteBallPosition}"); // Descomente se quiser logs constantes
             }
         }
         else if (msg.StartsWith("SCORE:"))
