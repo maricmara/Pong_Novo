@@ -126,6 +126,7 @@ public class Client : MonoBehaviour
         }
     }
 
+    // ReSharper disable Unity.PerformanceAnalysis
     void ProcessMessage(string msg)
     {
         if (msg.StartsWith("ASSIGN:"))
@@ -133,14 +134,15 @@ public class Client : MonoBehaviour
             myId = int.Parse(msg.Substring(7));
             Debug.Log($"[Cliente] ID atribuído: {myId} (duplas: Time A=1-2, Time B=3-4)");
 
-            // Define posições iniciais para duplas (duas raquetes por lado)
+            // Define posições iniciais para duplas (uma na frente da outra)
             Vector3[] startPositions = new Vector3[]
             {
-                new Vector3(-8f, 2f, 0f), // Player 1 - Time A, cima
-                new Vector3(-8f, -2f, 0f), // Player 2 - Time A, baixo
-                new Vector3(8f, 2f, 0f), // Player 3 - Time B, cima
-                new Vector3(8f, -2f, 0f) // Player 4 - Time B, baixo
+                new Vector3(-8f, 0f, -1f), // Player 1 - Time A (frente)
+                new Vector3(-8f, 0f, 1f),  // Player 2 - Time A (atrás)
+                new Vector3(8f, 0f, -1f),  // Player 3 - Time B (frente)
+                new Vector3(8f, 0f, 1f)    // Player 4 - Time B (atrás)
             };
+            
 
             for (int i = 0; i < 4; i++)
             {
@@ -149,6 +151,13 @@ public class Client : MonoBehaviour
                 {
                     players[i].transform.position = startPositions[i];
                     remotePositions[i] = startPositions[i];
+                    // Ajusta ordem de renderização (para quem aparece na frente)
+                    var rend = players[i].GetComponent<SpriteRenderer>();
+                    if (rend != null)
+                    {
+                        rend.sortingOrder = (i % 2 == 0) ? 2 : 1; // Primeiro de cada time na frente
+                    }
+
                 }
             }
 
